@@ -1,4 +1,3 @@
-
 # MapGallery
 
 A custom, discord integrated, map art plugin. Originally created for the yoursecondhome minecraft server.
@@ -45,4 +44,3 @@ support@mikelplayz.site
 ## Authors
 
 - [@MikelPlayz](https://github.com/MikelPlayz)
-
