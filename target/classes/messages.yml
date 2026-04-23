@@ -1,0 +1,18 @@
+#     _______ _________ _        _______  _        _______  _        _______           _______
+#    (       )\__   __/| \    /\(  ____ \( \      (  ____ )( \      (  ___  )|\     /|/ ___   )
+#    | () () |   ) (   |  \  / /| (    \/| (      | (    )|| (      | (   ) |( \   / )\/   )  |
+#    | || || |   | |   |  (_/ / | (__    | |      | (____)|| |      | (___) | \ (_) /     /   )
+#    | |(_)| |   | |   |   _ (  |  __)   | |      |  _____)| |      |  ___  |  \   /     /   /
+#    | |   | |   | |   |  ( \ \ | (      | |      | (      | |      | (   ) |   ) (     /   /
+#    | )   ( |___) (___|  /  \ \| (____/\| (____/\| )      | (____/\| )   ( |   | |    /   (_/\
+#    |/     \|\_______/|_/    \/(_______/(_______/|/       (_______/|/     \|   \_/   (_______/
+# Player and Discord-facing messages.
+prefix: "&8[&bMapGallery&8] &7"
+no-permission: "&cYou do not have permission."
+map-received: "&aYou received a gallery map."
+map-dropped: "&eInventory full; map dropped nearby."
+map-missing: "&cMap data missing for this entry."
+unknown-gallery-id: "&cUnknown gallery id."
+submission-ok: "Submission sent to staff review."
+submission-fail: "Submission failed; try again later."
+denied-duplicate: "Denied: duplicate image already exists."
