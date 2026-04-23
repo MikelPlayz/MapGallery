@@ -30,9 +30,12 @@ For the plugin reload logic.
 
 
 Commands:
-/gallery give 
+/gallery give
+
 /gallery search
+
 /gallery reload
+
 /gallery remove
 
 If you need the commands explained... Look else where to be honest, this plugin isn't for you.
