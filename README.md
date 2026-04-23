@@ -30,6 +30,7 @@ For the plugin reload logic.
 
 
 Commands:
+
 /gallery give
 
 /gallery search
