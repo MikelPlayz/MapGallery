@@ -14,7 +14,7 @@ This plugin isn't meant for everyone and is purely made to meet specific require
 
 ## Documentation
 
-Permissions:
+### Permissions:
 
 mapgallery.gallery
 To open the gallery GUI.
@@ -29,7 +29,7 @@ mapgallery.reload
 For the plugin reload logic.
 
 
-Commands:
+### Commands:
 
 /gallery give
 
@@ -39,7 +39,7 @@ Commands:
 
 /gallery remove
 
-If you need the commands explained... Look else where to be honest, this plugin isn't for you.
+If you need the commands explained... Look elsewhere to be honest, this plugin isn't for you.
 
 ## Feedback
 
