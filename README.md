@@ -9,7 +9,9 @@ Their Website: [Link](https://yoursecondhome.net)
 
 
 ## Note
+
 This plugin isn't meant for everyone and is purely made to meet specific requirements requested by a minecraft server I thoroughly enjoy. Additions are likely not to be added unless requested by server's admins. Please do not ask. However I do plan to maintain this through the minecraft updates, but note not much will change from the main operation/look of this plugin.
+
 ## Documentation
 
 Permissions:
@@ -34,6 +36,7 @@ Commands:
 /gallery remove
 
 If you need the commands explained... Look else where to be honest, this plugin isn't for you.
+
 ## Feedback
 
 If you have any ideas that may be useful, or experience a bad bug/glitch feel free to reach out at:
