@@ -195,6 +195,7 @@ public class DiscordBotService extends ListenerAdapter {
                     File pendingDir = new File(plugin.getDataFolder(), "pending");
                     String safeFilename = TextUtil.sanitizeToken(filename, 32);
                     if (safeFilename.isBlank()) safeFilename = "upload";
+                    String previewFilename = safeFilename.contains(".") ? safeFilename : safeFilename + ".png";
                     File outFile = new File(pendingDir, requestId + "-" + safeFilename + ".png");
                     step = "write-pending-file";
                     Files.createDirectories(pendingDir.toPath());
@@ -215,7 +216,7 @@ public class DiscordBotService extends ListenerAdapter {
                             .setTimestamp(Instant.now());
 
                     reviewChannel.sendMessageEmbeds(embed.build())
-                            .addFiles(FileUpload.fromData(outFile, "preview.png"))
+                            .addFiles(FileUpload.fromData(data, previewFilename))
                             .queue(msg -> {
                                 msg.addReaction(Emoji.fromUnicode("👍")).queue(
                                         success -> logDebug("Added 👍 reaction for requestId=" + requestId),

@@ -33,7 +33,6 @@ submission:
     - .png
     - .jpg
     - .jpeg
-    - .webp
   # If true, non-128x128 images are resized to fit within 128x128 while preserving aspect ratio.
   # Empty space is padded transparently. If false, non-128x128 images are rejected.
   resize-to-128x128: true

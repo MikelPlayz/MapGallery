@@ -1,6 +1,6 @@
 name: MapGallery
 main: tech.underside.mapgallery.MapGalleryPlugin
-version: 0.45.0
+version: 0.45.1
 api-version: '1.21'
 authors: [ "MikelPlayz" ]
 commands:
