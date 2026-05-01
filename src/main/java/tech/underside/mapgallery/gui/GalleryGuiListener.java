@@ -13,20 +13,26 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.map.MapView;
+import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
+import java.util.logging.Level;
 
 public class GalleryGuiListener implements Listener {
+    private final JavaPlugin plugin;
     private final GalleryService gallery;
     private final MapArtService mapService;
     private final String title;
     private final int pageSize;
+    private final boolean debug;
 
-    public GalleryGuiListener(GalleryService gallery, MapArtService mapService, String title, int pageSize) {
+    public GalleryGuiListener(JavaPlugin plugin, GalleryService gallery, MapArtService mapService, String title, int pageSize, boolean debug) {
+        this.plugin = plugin;
         this.gallery = gallery;
         this.mapService = mapService;
         this.title = title;
         this.pageSize = pageSize;
+        this.debug = debug;
     }
 
     public void open(Player player, int page, List<GalleryItem> source) {
@@ -59,6 +65,7 @@ public class GalleryGuiListener implements Listener {
         try {
             id = Integer.parseInt(dn.split(" ")[0].substring(1));
         } catch (Exception e) {
+            if (debug) plugin.getLogger().log(Level.SEVERE, "[DEBUG] Failed parsing clicked gallery id from display name: " + dn, e);
             return;
         }
         gallery.byId(id).ifPresent(item -> {

@@ -24,13 +24,22 @@ public final class ImageUtil {
         }
     }
 
-    public static BufferedImage to64(BufferedImage source, boolean resizeAllowed) {
-        if (source.getWidth() == 64 && source.getHeight() == 64) return source;
-        if (!resizeAllowed) throw new IllegalArgumentException("Image must be exactly 64x64");
-        BufferedImage out = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
+    public static BufferedImage toMapSize(BufferedImage source, boolean resizeAllowed) {
+        final int target = 128;
+        if (source.getWidth() == target && source.getHeight() == target) return source;
+        if (!resizeAllowed) throw new IllegalArgumentException("Image must be exactly 128x128");
+        BufferedImage out = new BufferedImage(target, target, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = out.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-        g.drawImage(source, 0, 0, 64, 64, null);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        double scale = Math.min((double) target / source.getWidth(), (double) target / source.getHeight());
+        int scaledWidth = Math.max(1, (int) Math.round(source.getWidth() * scale));
+        int scaledHeight = Math.max(1, (int) Math.round(source.getHeight() * scale));
+        int x = (target - scaledWidth) / 2;
+        int y = (target - scaledHeight) / 2;
+        g.drawImage(source, x, y, scaledWidth, scaledHeight, null);
         g.dispose();
         return out;
     }

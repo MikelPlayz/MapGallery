@@ -15,18 +15,24 @@ import org.bukkit.map.MapView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import org.bukkit.plugin.java.JavaPlugin;
 
 public class GalleryCommand implements CommandExecutor, TabCompleter {
+    private final JavaPlugin plugin;
     private final GalleryService gallery;
     private final GalleryGuiListener gui;
     private final MapArtService maps;
     private final Runnable reloadAction;
+    private final boolean debug;
 
-    public GalleryCommand(GalleryService gallery, GalleryGuiListener gui, MapArtService maps, Runnable reloadAction) {
+    public GalleryCommand(JavaPlugin plugin, GalleryService gallery, GalleryGuiListener gui, MapArtService maps, Runnable reloadAction, boolean debug) {
+        this.plugin = plugin;
         this.gallery = gallery;
         this.gui = gui;
         this.maps = maps;
         this.reloadAction = reloadAction;
+        this.debug = debug;
     }
 
     @Override
@@ -52,7 +58,10 @@ public class GalleryCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 int id;
-                try { id = Integer.parseInt(args[1]); } catch (Exception e) { return true; }
+                try { id = Integer.parseInt(args[1]); } catch (Exception e) {
+                    logException("Failed to parse /gallery give id from input: " + args[1], e);
+                    return true;
+                }
                 gallery.byId(id).ifPresentOrElse(item -> {
                     MapView view = Bukkit.getMap(item.getMapId());
                     if (view == null) {
@@ -82,6 +91,7 @@ public class GalleryCommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage("MapGallery configuration reloaded.");
                 } catch (Exception e) {
                     sender.sendMessage("Reload failed: " + e.getMessage());
+                    logException("Reload action failed from /gallery reload", e);
                 }
                 return true;
             }
@@ -91,7 +101,9 @@ public class GalleryCommand implements CommandExecutor, TabCompleter {
                 try {
                     int id = Integer.parseInt(args[1]);
                     sender.sendMessage(gallery.remove(id) ? "Removed #" + id : "Not found.");
-                } catch (NumberFormatException ignored) {}
+                } catch (NumberFormatException e) {
+                    logException("Failed to parse /gallery remove id from input: " + args[1], e);
+                }
                 return true;
             }
             default -> { return false; }
@@ -107,5 +119,9 @@ public class GalleryCommand implements CommandExecutor, TabCompleter {
             return ids;
         }
         return List.of();
+    }
+
+    private void logException(String message, Throwable throwable) {
+        if (debug) plugin.getLogger().log(Level.SEVERE, "[DEBUG] " + message, throwable);
     }
 }

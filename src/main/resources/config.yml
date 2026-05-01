@@ -34,8 +34,9 @@ submission:
     - .jpg
     - .jpeg
     - .webp
-  # If true, non-64x64 images are resized to 64x64. If false, rejected.
-  resize-to-64x64: true
+  # If true, non-128x128 images are resized to fit within 128x128 while preserving aspect ratio.
+  # Empty space is padded transparently. If false, non-128x128 images are rejected.
+  resize-to-128x128: true
 
 maps:
   # Display naming format for approved maps.

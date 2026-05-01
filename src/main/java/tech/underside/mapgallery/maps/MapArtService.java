@@ -13,6 +13,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import javax.imageio.ImageIO;
 import java.io.File;
 import java.awt.image.BufferedImage;
+import java.util.logging.Level;
 
 public class MapArtService {
     private final JavaPlugin plugin;
@@ -69,6 +70,9 @@ public class MapArtService {
                 view.addRenderer(new StaticMapRenderer(image));
             } catch (Exception e) {
                 plugin.getLogger().warning("Failed to restore renderer for map #" + item.getId() + ": " + e.getMessage());
+                if (plugin.getConfig().getBoolean("debug", false)) {
+                    plugin.getLogger().log(Level.SEVERE, "[DEBUG] Failed to restore renderer for map #" + item.getId(), e);
+                }
             }
             view.setLocked(true);
         });

@@ -43,20 +43,26 @@ public class MapGalleryPlugin extends JavaPlugin {
         }
 
         PluginSettings settings = new PluginSettings(getConfig());
+        if (settings.debug) getLogger().info("[DEBUG] initializeOrReload start reload=" + isReload);
         if (repository == null) {
             repository = new DataRepository(getDataFolder());
+            if (settings.debug) getLogger().info("[DEBUG] DataRepository initialized at " + getDataFolder().getAbsolutePath());
         }
         repository.load();
+        if (settings.debug) getLogger().info("[DEBUG] Repository load complete.");
 
         galleryService = new GalleryService(repository);
         mapArtService = new MapArtService(this);
-        guiListener = new GalleryGuiListener(galleryService, mapArtService, settings.guiTitle, settings.pageSize);
+        guiListener = new GalleryGuiListener(this, galleryService, mapArtService, settings.guiTitle, settings.pageSize, settings.debug);
 
         PluginCommand galleryCommandRef = getCommand("gallery");
         if (galleryCommandRef != null) {
-            GalleryCommand galleryCommand = new GalleryCommand(galleryService, guiListener, mapArtService, this::reloadPluginState);
+            GalleryCommand galleryCommand = new GalleryCommand(this, galleryService, guiListener, mapArtService, this::reloadPluginState, settings.debug);
             galleryCommandRef.setExecutor(galleryCommand);
             galleryCommandRef.setTabCompleter(galleryCommand);
+            if (settings.debug) getLogger().info("[DEBUG] /gallery command executor/tab completer registered.");
+        } else if (settings.debug) {
+            getLogger().warning("[DEBUG] /gallery command not found in plugin.yml");
         }
 
         getServer().getPluginManager().registerEvents(guiListener, this);
@@ -64,5 +70,6 @@ public class MapGalleryPlugin extends JavaPlugin {
 
         discord = new DiscordBotService(this, settings, repository, mapArtService, galleryService);
         discord.start();
+        if (settings.debug) getLogger().info("[DEBUG] initializeOrReload complete.");
     }
 }

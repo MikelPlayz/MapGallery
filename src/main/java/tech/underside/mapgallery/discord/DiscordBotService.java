@@ -74,7 +74,7 @@ public class DiscordBotService extends ListenerAdapter {
                     .build();
             this.jda.awaitReady();
             this.jda.updateCommands().addCommands(
-                    Commands.slash("submitmap", "Submit a 64x64 map art request")
+                    Commands.slash("submitmap", "Submit a 128x128 map art request")
                             .addOption(OptionType.ATTACHMENT, "image", "Image to submit", true)
             ).queue(
                     success -> logDebug("Slash command registration completed."),
@@ -165,33 +165,42 @@ public class DiscordBotService extends ListenerAdapter {
 
             @Override
             public void onResponse(okhttp3.Call call, okhttp3.Response response) {
+                String step = "response-open";
                 try (response) {
+                    step = "response-validate";
                     logDebug("Download response for modal " + modal.getModalId() + " status=" + response.code() + " message=" + response.message());
                     if (!response.isSuccessful() || response.body() == null) {
                         modal.getHook().sendMessage("Image download failed.").queue();
                         logDebug("Image download unsuccessful or empty body. status=" + response.code());
                         return;
                     }
+                    step = "read-bytes";
                     byte[] data = response.body().bytes();
                     logDebug("Downloaded image bytes=" + data.length + " filename=" + filename);
+                    step = "decode-image";
                     BufferedImage image = ImageUtil.readImage(data);
                     logDebug("Decoded image dimensions=" + image.getWidth() + "x" + image.getHeight() + " type=" + image.getType());
-                    if ((image.getWidth() != 64 || image.getHeight() != 64) && !settings.resizeAllowed) {
-                        modal.getHook().sendMessage("Image must be exactly 64x64 (resizing is disabled).").queue();
+                    if ((image.getWidth() != 128 || image.getHeight() != 128) && !settings.resizeAllowed) {
+                        modal.getHook().sendMessage("Image must be exactly 128x128 (resizing is disabled).").queue();
                         logDebug("Rejected image dimensions with resizing disabled.");
                         return;
                     }
+                    step = "normalize-image";
+                    BufferedImage normalized = ImageUtil.toMapSize(image, settings.resizeAllowed);
                     String safeTitle = TextUtil.sanitizeToken(title, 40);
                     String requestId = UUID.randomUUID().toString().substring(0, 8);
                     String hash = ImageUtil.sha256(data);
 
+                    step = "prepare-pending-file";
                     File pendingDir = new File(plugin.getDataFolder(), "pending");
                     String safeFilename = TextUtil.sanitizeToken(filename, 32);
-                    if (safeFilename.isBlank()) safeFilename = "upload.png";
-                    File outFile = new File(pendingDir, requestId + "-" + safeFilename);
+                    if (safeFilename.isBlank()) safeFilename = "upload";
+                    File outFile = new File(pendingDir, requestId + "-" + safeFilename + ".png");
+                    step = "write-pending-file";
                     Files.createDirectories(pendingDir.toPath());
-                    Files.write(outFile.toPath(), data);
+                    ImageUtil.writePng(normalized, outFile);
 
+                    step = "resolve-review-channel";
                     TextChannel reviewChannel = modal.getJDA().getTextChannelById(settings.reviewChannelId);
                     if (reviewChannel == null) {
                         modal.getHook().sendMessage("Review channel not found.").queue();
@@ -230,7 +239,7 @@ public class DiscordBotService extends ListenerAdapter {
                             });
                 } catch (Exception e) {
                     modal.getHook().sendMessage("Invalid/corrupted image or processing failure.").queue();
-                    logException("Submission processing failed for modal " + modal.getModalId() + " filename=" + filename + " url=" + url, e);
+                    logException("Submission processing failed at step=" + step + " for modal " + modal.getModalId() + " filename=" + filename + " url=" + url, e);
                 }
             }
         });
@@ -292,7 +301,7 @@ public class DiscordBotService extends ListenerAdapter {
                     BufferedImage image = javax.imageio.ImageIO.read(file);
                     if (image == null) throw new IllegalStateException("Pending image is unreadable");
                     logDebug("Loaded pending image requestId=" + pending.getRequestId() + " dimensions=" + image.getWidth() + "x" + image.getHeight());
-                    BufferedImage normalized = ImageUtil.to64(image, settings.resizeAllowed);
+                    BufferedImage normalized = ImageUtil.toMapSize(image, settings.resizeAllowed);
                     MapView view = mapArtService.createLockedMap(normalized);
                     File approvedDir = new File(plugin.getDataFolder(), "approved");
                     File approvedImage = new File(approvedDir, pending.getRequestId() + ".png");
