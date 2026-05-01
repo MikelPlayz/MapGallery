@@ -5,7 +5,7 @@
 
     <groupId>tech.underside</groupId>
     <artifactId>mapgallery</artifactId>
-    <version>0.42.3</version>
+    <version>0.43.0</version>
     <packaging>jar</packaging>
 
     <name>MapGallery</name>
