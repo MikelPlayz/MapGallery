@@ -54,5 +54,5 @@ permissions:
   admin: "mapgallery.admin"
   reload: "mapgallery.reload"
 
-# Enable verbose plugin logging for diagnostics.
+# Enable maximum plugin diagnostics. When true, debug traces and full stack traces
 debug: false
