@@ -1,0 +1,62 @@
+#     _______ _________ _        _______  _        _______  _        _______           _______
+#    (       )\__   __/| \    /\(  ____ \( \      (  ____ )( \      (  ___  )|\     /|/ ___   )
+#    | () () |   ) (   |  \  / /| (    \/| (      | (    )|| (      | (   ) |( \   / )\/   )  |
+#    | || || |   | |   |  (_/ / | (__    | |      | (____)|| |      | (___) | \ (_) /     /   )
+#    | |(_)| |   | |   |   _ (  |  __)   | |      |  _____)| |      |  ___  |  \   /     /   /
+#    | |   | |   | |   |  ( \ \ | (      | |      | (      | |      | (   ) |   ) (     /   /
+#    | )   ( |___) (___|  /  \ \| (____/\| (____/\| )      | (____/\| )   ( |   | |    /   (_/\
+#    |/     \|\_______/|_/    \/(_______/(_______/|/       (_______/|/     \|   \_/   (_______/
+  # Main plugin configuration for MapGallery.
+discord:
+  # Discord bot token. Leave empty to disable the bot safely.
+  token: ""
+  # Target guild/server ID where commands and moderation occur.
+  guild-id: 0
+  # Channel ID for staff review messages. Bot posts normal messages here.
+  review-channel-id: 0
+  # Optional log channel ID for approvals.
+  log-channel-approved-id: 0
+  # Optional log channel ID for denials.
+  log-channel-denied-id: 0
+  # Role IDs that are allowed to approve/deny via reactions.
+  staff-role-ids: []
+  # User IDs explicitly allowed to approve/deny.
+  staff-user-ids: []
+  # If true, DM submitter when approved/denied.
+  dm-result: true
+
+submission:
+  # Maximum allowed uploaded file size in bytes.
+  max-file-size-bytes: 2097152
+  # Allowed filename suffixes/extensions.
+  allowed-image-types:
+    - .png
+    - .jpg
+    - .jpeg
+    - .webp
+  # If true, non-128x128 images are resized to fit within 128x128 while preserving aspect ratio.
+  # Empty space is padded transparently. If false, non-128x128 images are rejected.
+  resize-to-64x64: true
+  # Per-user cooldown between /submitmap uses (in seconds).
+  cooldown-seconds: 0
+
+maps:
+  # Display naming format for approved maps.
+  naming-format: "%user% - %title%"
+
+gallery:
+  # GUI title used for inventory browser.
+  gui-title: "Map Gallery"
+  # Number of map entries displayed per page (max practical in 54-slot inventory is 45).
+  page-size: 45
+
+permissions:
+  # Permission nodes documented for server administrators.
+  gallery: "mapgallery.gallery"
+  give: "mapgallery.give"
+  admin: "mapgallery.admin"
+  reload: "mapgallery.reload"
+
+# Enable maximum plugin diagnostics. When true, debug traces and full stack traces
+# for Discord submission/download/processing failures are printed to console.
+debug: false
