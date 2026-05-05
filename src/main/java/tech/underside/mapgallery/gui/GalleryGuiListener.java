@@ -114,7 +114,7 @@ public class GalleryGuiListener implements Listener {
                 player.sendMessage("Map data missing for #" + id);
                 return;
             }
-            ItemStack map = mapService.createMapItem(view, item.getDisplayName(), item.getId());
+            ItemStack map = mapService.createMapItem(view, item.getId(), item.getCreatorName(), item.getTitle());
             var overflow = player.getInventory().addItem(map);
             if (!overflow.isEmpty()) {
                 overflow.values().forEach(stack -> player.getWorld().dropItemNaturally(player.getLocation(), stack));

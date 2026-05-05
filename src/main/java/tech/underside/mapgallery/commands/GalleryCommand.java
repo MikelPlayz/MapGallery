@@ -73,7 +73,7 @@ public class GalleryCommand implements CommandExecutor, TabCompleter {
                         player.sendMessage(plugin.message("map-missing", "&cMap data missing for this entry."));
                         return;
                     }
-                    ItemStack stack = maps.createMapItem(view, item.getDisplayName(), item.getId());
+                    ItemStack stack = maps.createMapItem(view, item.getId(), item.getCreatorName(), item.getTitle());
                     player.getInventory().addItem(stack);
                     player.sendMessage(plugin.message("map-received", "&aYou received a gallery map."));
                 }, () -> player.sendMessage(plugin.message("unknown-gallery-id", "&cUnknown gallery id.")));

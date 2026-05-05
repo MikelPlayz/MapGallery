@@ -1,6 +1,6 @@
 name: MapGallery
 main: tech.underside.mapgallery.MapGalleryPlugin
-version: 0.50.0
+version: 1.0.0
 api-version: '1.21'
 authors: [ "MikelPlayz," ]
 softdepend: [ "DiscordSRV" ]

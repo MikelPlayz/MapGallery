@@ -333,8 +333,8 @@ public class DiscordBotService extends ListenerAdapter {
                             minecraftName, pending.getDiscordUserId(), pending.getImageHash(),
                             approvedImage.getAbsolutePath());
                     logToChannel(settings.approvedLogChannelId,
-                            "Approved #" + item.getId() + " by " + actor.getName() + " for " + minecraftName + " Request ID: "+ pending.getRequestId());
-                    dmResult(pending.getDiscordUserId(), true, pending.getTitle(), " Use `/gallery give " + item.getId() +"`" + " To obtain your map in-game! ");
+                            "Approved #" + item.getId() + " by " + actor.getName() + " for " + minecraftName);
+                    dmResult(pending.getDiscordUserId(), true, pending.getTitle(), "Approved as gallery ID #" + item.getId());
                 }
             } else {
                 logToChannel(settings.deniedLogChannelId, "Denied request " + pending.getRequestId() + " by " + actor.getName());

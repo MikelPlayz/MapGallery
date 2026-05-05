@@ -36,12 +36,16 @@ public class MapArtService {
         return view;
     }
 
-    public ItemStack createMapItem(MapView view, String name, int galleryId) {
+    public ItemStack createMapItem(MapView view, int galleryId, String submitter, String title) {
         ItemStack item = new ItemStack(Material.FILLED_MAP, 1);
         MapMeta meta = (MapMeta) item.getItemMeta();
         meta.setMapView(view);
-        meta.setDisplayName(name);
-        meta.setLore(java.util.List.of("Gallery ID: " + galleryId, "Immutable approved map art"));
+        meta.setDisplayName(null);
+        meta.setLore(java.util.List.of(
+                "Gallery ID: " + galleryId,
+                "Submitter: " + submitter,
+                "Title: " + title
+        ));
         item.setItemMeta(meta);
         return item;
     }
