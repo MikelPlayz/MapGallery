@@ -33,6 +33,7 @@ import org.bukkit.map.MapView;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.awt.image.BufferedImage;
+import java.awt.Color;
 import java.io.File;
 import java.nio.file.Files;
 import java.time.Instant;
@@ -52,6 +53,7 @@ public class DiscordBotService extends ListenerAdapter {
     private final GalleryService galleryService;
     private final Set<String> inFlight = ConcurrentHashMap.newKeySet();
     private final Map<String, AttachmentContext> modalAttachmentContext = new ConcurrentHashMap<>();
+    private final Map<Long, Instant> submissionCooldowns = new ConcurrentHashMap<>();
     private JDA jda;
 
     public DiscordBotService(JavaPlugin plugin, PluginSettings settings, DataRepository repo,
@@ -99,6 +101,13 @@ public class DiscordBotService extends ListenerAdapter {
         if (!event.getName().equals("submitmap")) return;
         cleanupExpiredAttachmentContexts();
         String attachmentUrl = event.getOption("image", o -> o.getAsAttachment().getUrl());
+        Instant now = Instant.now();
+        Instant nextAllowed = submissionCooldowns.get(event.getUser().getIdLong());
+        if (nextAllowed != null && nextAllowed.isAfter(now)) {
+            long remaining = Math.max(1, nextAllowed.getEpochSecond() - now.getEpochSecond());
+            event.reply("You are on cooldown. Try again in " + remaining + "s.").setEphemeral(true).queue();
+            return;
+        }
         String attachmentName = event.getOption("image", o -> o.getAsAttachment().getFileName());
         long attachmentSize = event.getOption("image", o -> o.getAsAttachment().getSize());
         logDebug("Received /submitmap from user " + event.getUser().getId() + " file=" + attachmentName + " size=" + attachmentSize);
@@ -230,6 +239,9 @@ public class DiscordBotService extends ListenerAdapter {
                                         modal.getUser().getName(), title, safeTitle, outFile.getAbsolutePath(), hash,
                                         Instant.now(), msg.getIdLong());
                                 repo.putPending(pending);
+                                if (settings.submissionCooldownSeconds > 0) {
+                                    submissionCooldowns.put(modal.getUser().getIdLong(), Instant.now().plusSeconds(settings.submissionCooldownSeconds));
+                                }
                                 modal.getHook().sendMessage("Submitted for staff review. Request ID: " + requestId).queue();
                                 logDebug("Submission queued requestId=" + requestId + " user=" + modal.getUser().getId());
                             }, fail -> {
@@ -266,10 +278,17 @@ public class DiscordBotService extends ListenerAdapter {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 try {
                     processDecision(event.getUser(), pending, approve.get());
-                    event.retrieveMessage().queue(
-                            Message::delete,
-                            fail -> logException("Failed to delete review message for requestId=" + req, fail)
-                    );
+                    event.retrieveMessage().queue(message -> {
+                        Message updated = message;
+                        if (!message.getEmbeds().isEmpty()) {
+                            EmbedBuilder builder = new EmbedBuilder(message.getEmbeds().getFirst())
+                                    .setColor(approve.get() ? Color.GREEN : Color.RED)
+                                    .addField("Status", approve.get() ? "Approved" : "Denied", false)
+                                    .setTimestamp(Instant.now());
+                            message.editMessageEmbeds(builder.build()).queue();
+                        }
+                        updated.clearReactions().queue();
+                    }, fail -> logException("Failed to update review message for requestId=" + req, fail));
                 } finally {
                     inFlight.remove(req);
                 }
@@ -307,13 +326,14 @@ public class DiscordBotService extends ListenerAdapter {
                     File approvedDir = new File(plugin.getDataFolder(), "approved");
                     File approvedImage = new File(approvedDir, pending.getRequestId() + ".png");
                     ImageUtil.writePng(normalized, approvedImage);
-                    String display = settings.namingFormat.replace("%user%", pending.getDiscordUsername())
+                    String minecraftName = resolveMinecraftName(pending.getDiscordUserId(), pending.getDiscordUsername());
+                    String display = settings.namingFormat.replace("%user%", minecraftName)
                             .replace("%title%", pending.getSanitizedTitle());
                     GalleryItem item = repo.addGalleryItem(view.getId(), TextUtil.sanitizeToken(display, 64), pending.getTitle(),
-                            pending.getDiscordUsername(), pending.getDiscordUserId(), pending.getImageHash(),
+                            minecraftName, pending.getDiscordUserId(), pending.getImageHash(),
                             approvedImage.getAbsolutePath());
                     logToChannel(settings.approvedLogChannelId,
-                            "Approved #" + item.getId() + " by " + actor.getName() + " for " + pending.getDiscordUsername());
+                            "Approved #" + item.getId() + " by " + actor.getName() + " for " + minecraftName);
                     dmResult(pending.getDiscordUserId(), true, pending.getTitle(), "Approved as gallery ID #" + item.getId());
                 }
             } else {
@@ -362,6 +382,19 @@ public class DiscordBotService extends ListenerAdapter {
     private void cleanupExpiredAttachmentContexts() {
         Instant cutoff = Instant.now().minusSeconds(300);
         modalAttachmentContext.entrySet().removeIf(e -> e.getValue().createdAt().isBefore(cutoff));
+    }
+
+    private String resolveMinecraftName(long discordUserId, String fallback) {
+        try {
+            if (Bukkit.getPluginManager().getPlugin("DiscordSRV") == null) return fallback;
+            java.util.UUID uuid = github.scarsz.discordsrv.DiscordSRV.getPlugin().getAccountLinkManager().getUuid(String.valueOf(discordUserId));
+            if (uuid == null) return fallback;
+            org.bukkit.OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
+            return player.getName() != null ? player.getName() : fallback;
+        } catch (Throwable t) {
+            logException("Failed to resolve Minecraft name for Discord userId=" + discordUserId, t);
+            return fallback;
+        }
     }
 
     private void logDebug(String message) {

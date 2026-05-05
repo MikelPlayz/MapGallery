@@ -18,6 +18,7 @@ public class PluginSettings {
     public final long maxFileSize;
     public final Set<String> allowedTypes;
     public final boolean resizeAllowed;
+    public final long submissionCooldownSeconds;
     public final String namingFormat;
     public final String guiTitle;
     public final int pageSize;
@@ -35,6 +36,7 @@ public class PluginSettings {
         maxFileSize = c.getLong("submission.max-file-size-bytes", 2_097_152);
         allowedTypes = new HashSet<>(c.getStringList("submission.allowed-image-types"));
         resizeAllowed = c.getBoolean("submission.resize-to-64x64", true);
+        submissionCooldownSeconds = Math.max(0L, c.getLong("submission.cooldown-seconds", 0L));
         namingFormat = c.getString("maps.naming-format", "%user% - %title%");
         guiTitle = c.getString("gallery.gui-title", "Map Gallery");
         pageSize = Math.max(9, c.getInt("gallery.page-size", 45));

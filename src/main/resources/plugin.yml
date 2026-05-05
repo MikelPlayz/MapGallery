@@ -1,8 +1,9 @@
 name: MapGallery
 main: tech.underside.mapgallery.MapGalleryPlugin
-version: 0.45.1
+version: 1.0.0
 api-version: '1.21'
-authors: [ "MikelPlayz" ]
+authors: [ "MikelPlayz, makattac1980" ]
+softdepend: [ "DiscordSRV" ]
 commands:
   gallery:
     description: Open and manage map gallery

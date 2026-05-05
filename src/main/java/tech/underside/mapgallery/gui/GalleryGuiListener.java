@@ -16,6 +16,11 @@ import org.bukkit.map.MapView;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 public class GalleryGuiListener implements Listener {
@@ -25,6 +30,11 @@ public class GalleryGuiListener implements Listener {
     private final String title;
     private final int pageSize;
     private final boolean debug;
+    private final Map<UUID, GalleryViewState> viewState = new ConcurrentHashMap<>();
+
+    private static final int PREV_SLOT = 45;
+    private static final int SORT_SLOT = 49;
+    private static final int NEXT_SLOT = 53;
 
     public GalleryGuiListener(JavaPlugin plugin, GalleryService gallery, MapArtService mapService, String title, int pageSize, boolean debug) {
         this.plugin = plugin;
@@ -36,12 +46,24 @@ public class GalleryGuiListener implements Listener {
     }
 
     public void open(Player player, int page, List<GalleryItem> source) {
+        open(player, page, source, SortOrder.NEWEST);
+    }
+
+    private void open(Player player, int page, List<GalleryItem> source, SortOrder sort) {
         int size = 54;
-        Inventory inv = Bukkit.createInventory(null, size, title + " [" + page + "]");
-        int start = (page - 1) * pageSize;
-        int end = Math.min(source.size(), start + pageSize);
+        int totalPages = Math.max(1, (int) Math.ceil(source.size() / (double) pageSize));
+        int currentPage = Math.max(1, Math.min(page, totalPages));
+        Inventory inv = Bukkit.createInventory(null, size, title + " [" + currentPage + "/" + totalPages + "]");
+        List<GalleryItem> ordered = new ArrayList<>(source);
+        ordered.sort(sort == SortOrder.NEWEST
+                ? Comparator.comparing(GalleryItem::getApprovedAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                : Comparator.comparing(GalleryItem::getApprovedAt, Comparator.nullsLast(Comparator.naturalOrder())));
+
+        viewState.put(player.getUniqueId(), new GalleryViewState(source, currentPage, sort));
+        int start = (currentPage - 1) * pageSize;
+        int end = Math.min(ordered.size(), start + pageSize);
         for (int i = start; i < end; i++) {
-            GalleryItem gi = source.get(i);
+            GalleryItem gi = ordered.get(i);
             ItemStack icon = new ItemStack(Material.FILLED_MAP);
             ItemMeta meta = icon.getItemMeta();
             meta.setDisplayName("#" + gi.getId() + " " + gi.getDisplayName());
@@ -49,6 +71,10 @@ public class GalleryGuiListener implements Listener {
             icon.setItemMeta(meta);
             inv.setItem(i - start, icon);
         }
+
+        if (currentPage > 1) inv.setItem(PREV_SLOT, button(Material.ARROW, "§ePrevious Page"));
+        inv.setItem(SORT_SLOT, button(Material.HOPPER, "§bSort: " + (sort == SortOrder.NEWEST ? "Newest" : "Oldest")));
+        if (currentPage < totalPages) inv.setItem(NEXT_SLOT, button(Material.ARROW, "§eNext Page"));
         player.openInventory(inv);
     }
 
@@ -59,6 +85,20 @@ public class GalleryGuiListener implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) return;
         ItemStack clicked = event.getCurrentItem();
         if (clicked == null || !clicked.hasItemMeta()) return;
+        GalleryViewState state = viewState.get(player.getUniqueId());
+        if (state == null) return;
+        if (event.getRawSlot() == PREV_SLOT) {
+            open(player, state.page() - 1, state.source(), state.sort());
+            return;
+        }
+        if (event.getRawSlot() == NEXT_SLOT) {
+            open(player, state.page() + 1, state.source(), state.sort());
+            return;
+        }
+        if (event.getRawSlot() == SORT_SLOT) {
+            open(player, 1, state.source(), state.sort().toggle());
+            return;
+        }
         String dn = clicked.getItemMeta().getDisplayName();
         if (dn == null || !dn.startsWith("#")) return;
         int id;
@@ -84,4 +124,23 @@ public class GalleryGuiListener implements Listener {
             }
         });
     }
+
+    private ItemStack button(Material material, String name) {
+        ItemStack stack = new ItemStack(material);
+        ItemMeta meta = stack.getItemMeta();
+        meta.setDisplayName(name);
+        stack.setItemMeta(meta);
+        return stack;
+    }
+
+    private enum SortOrder {
+        NEWEST,
+        OLDEST;
+
+        private SortOrder toggle() {
+            return this == NEWEST ? OLDEST : NEWEST;
+        }
+    }
+
+    private record GalleryViewState(List<GalleryItem> source, int page, SortOrder sort) {}
 }

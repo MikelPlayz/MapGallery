@@ -7,6 +7,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class GalleryService {
     private final DataRepository repo;
@@ -32,5 +34,13 @@ public class GalleryService {
 
     public boolean remove(int id) {
         return repo.removeGallery(id);
+    }
+
+    public Set<Integer> removeAll() {
+        Set<Integer> mapIds = repo.allGallery().stream().map(GalleryItem::getMapId).collect(Collectors.toSet());
+        for (GalleryItem item : List.copyOf(repo.allGallery())) {
+            repo.removeGallery(item.getId());
+        }
+        return mapIds;
     }
 }

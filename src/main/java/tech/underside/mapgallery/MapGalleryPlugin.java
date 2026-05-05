@@ -8,8 +8,12 @@ import tech.underside.mapgallery.gui.GalleryGuiListener;
 import tech.underside.mapgallery.maps.MapArtService;
 import tech.underside.mapgallery.storage.DataRepository;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
+
+import java.io.File;
 
 public class MapGalleryPlugin extends JavaPlugin {
     private DataRepository repository;
@@ -17,6 +21,7 @@ public class MapGalleryPlugin extends JavaPlugin {
     private DiscordBotService discord;
     private GalleryService galleryService;
     private MapArtService mapArtService;
+    private FileConfiguration messages;
 
     @Override
     public void onEnable() {
@@ -41,6 +46,8 @@ public class MapGalleryPlugin extends JavaPlugin {
             if (guiListener != null) HandlerList.unregisterAll(guiListener);
             reloadConfig();
         }
+
+        messages = YamlConfiguration.loadConfiguration(new File(getDataFolder(), "messages.yml"));
 
         PluginSettings settings = new PluginSettings(getConfig());
         if (settings.debug) getLogger().info("[DEBUG] initializeOrReload start reload=" + isReload);
@@ -71,5 +78,11 @@ public class MapGalleryPlugin extends JavaPlugin {
         discord = new DiscordBotService(this, settings, repository, mapArtService, galleryService);
         discord.start();
         if (settings.debug) getLogger().info("[DEBUG] initializeOrReload complete.");
+    }
+
+    public String message(String key, String fallback) {
+        String prefix = messages.getString("prefix", "");
+        String value = messages.getString(key, fallback);
+        return org.bukkit.ChatColor.translateAlternateColorCodes('&', prefix + value);
     }
 }

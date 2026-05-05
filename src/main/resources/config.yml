@@ -33,9 +33,12 @@ submission:
     - .png
     - .jpg
     - .jpeg
+    - .webp
   # If true, non-128x128 images are resized to fit within 128x128 while preserving aspect ratio.
   # Empty space is padded transparently. If false, non-128x128 images are rejected.
-  resize-to-128x128: true
+  resize-to-64x64: true
+  # Per-user cooldown between /submitmap uses (in seconds).
+  cooldown-seconds: 0
 
 maps:
   # Display naming format for approved maps.
@@ -55,4 +58,5 @@ permissions:
   reload: "mapgallery.reload"
 
 # Enable maximum plugin diagnostics. When true, debug traces and full stack traces
+# for Discord submission/download/processing failures are printed to console.
 debug: false
