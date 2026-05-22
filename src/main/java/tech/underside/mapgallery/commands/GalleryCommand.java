@@ -10,9 +10,15 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.Chunk;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.Container;
+import org.bukkit.block.ShulkerBox;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.inventory.meta.BlockStateMeta;
 import org.bukkit.inventory.meta.MapMeta;
 import org.bukkit.map.MapView;
 import org.bukkit.entity.ItemFrame;
@@ -111,7 +117,14 @@ public class GalleryCommand implements CommandExecutor, TabCompleter {
                 }
                 try {
                     int id = Integer.parseInt(args[1]);
-                    sender.sendMessage(gallery.remove(id) ? "Removed #" + id : "Not found.");
+                    gallery.byId(id).ifPresentOrElse(item -> {
+                        if (!gallery.remove(id)) {
+                            sender.sendMessage("Not found.");
+                            return;
+                        }
+                        int purged = purgeAllMapItems(Set.of(item.getMapId()));
+                        sender.sendMessage("Removed #" + id + " and purged " + purged + " map items/frames.");
+                    }, () -> sender.sendMessage("Not found."));
                 } catch (NumberFormatException e) {
                     logException("Failed to parse /gallery remove id from input: " + args[1], e);
                 }
@@ -138,15 +151,36 @@ public class GalleryCommand implements CommandExecutor, TabCompleter {
         int removed = 0;
         for (org.bukkit.World world : Bukkit.getWorlds()) {
             for (ItemFrame frame : world.getEntitiesByClass(ItemFrame.class)) {
-                if (isGalleryMap(frame.getItem(), mapIds)) {
+                ItemStack frameItem = frame.getItem();
+                if (isGalleryMap(frameItem, mapIds)) {
                     frame.setItem(null);
                     removed++;
+                } else {
+                    int removedFromShulker = removeFromShulkerItem(frameItem, mapIds);
+                    if (removedFromShulker > 0) {
+                        frame.setItem(frameItem);
+                        removed += removedFromShulker;
+                    }
                 }
             }
             for (Item item : world.getEntitiesByClass(Item.class)) {
-                if (isGalleryMap(item.getItemStack(), mapIds)) {
+                ItemStack stack = item.getItemStack();
+                if (isGalleryMap(stack, mapIds)) {
                     item.remove();
                     removed++;
+                } else {
+                    int removedFromShulker = removeFromShulkerItem(stack, mapIds);
+                    if (removedFromShulker > 0) {
+                        item.setItemStack(stack);
+                        removed += removedFromShulker;
+                    }
+                }
+            }
+            for (Chunk chunk : world.getLoadedChunks()) {
+                for (BlockState state : chunk.getTileEntities()) {
+                    if (state instanceof Container container) {
+                        removed += removeFromInventory(container.getInventory(), mapIds);
+                    }
                 }
             }
         }
@@ -155,9 +189,13 @@ public class GalleryCommand implements CommandExecutor, TabCompleter {
             removed += removeMatchingStacks(inv.getStorageContents(), inv::setStorageContents, mapIds);
             removed += removeMatchingStacks(inv.getExtraContents(), inv::setExtraContents, mapIds);
             removed += removeMatchingStacks(inv.getArmorContents(), inv::setArmorContents, mapIds);
-            removed += removeMatchingStacks(player.getEnderChest().getContents(), player.getEnderChest()::setContents, mapIds);
+            removed += removeFromInventory(player.getEnderChest(), mapIds);
         }
         return removed;
+    }
+
+    private int removeFromInventory(Inventory inventory, Set<Integer> mapIds) {
+        return removeMatchingStacks(inventory.getContents(), inventory::setContents, mapIds);
     }
 
     private int removeMatchingStacks(ItemStack[] contents, java.util.function.Consumer<ItemStack[]> setter, Set<Integer> mapIds) {
@@ -167,9 +205,23 @@ public class GalleryCommand implements CommandExecutor, TabCompleter {
             if (isGalleryMap(copy[i], mapIds)) {
                 copy[i] = null;
                 removed++;
+            } else {
+                removed += removeFromShulkerItem(copy[i], mapIds);
             }
         }
         setter.accept(copy);
+        return removed;
+    }
+
+    private int removeFromShulkerItem(ItemStack stack, Set<Integer> mapIds) {
+        if (stack == null || !(stack.getItemMeta() instanceof BlockStateMeta meta)) return 0;
+        if (!(meta.getBlockState() instanceof ShulkerBox shulker)) return 0;
+
+        int removed = removeFromInventory(shulker.getInventory(), mapIds);
+        if (removed > 0) {
+            meta.setBlockState(shulker);
+            stack.setItemMeta(meta);
+        }
         return removed;
     }
 
