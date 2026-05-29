@@ -12,17 +12,16 @@ import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.Permission;
-import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.User;
-import net.dv8tion.jda.api.entities.emoji.Emoji;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
-import net.dv8tion.jda.api.events.message.react.MessageReactionAddEvent;
 import net.dv8tion.jda.api.events.interaction.GenericInteractionCreateEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.interactions.components.text.TextInput;
 import net.dv8tion.jda.api.interactions.components.text.TextInputStyle;
 import net.dv8tion.jda.api.utils.FileUpload;
@@ -38,14 +37,19 @@ import java.io.File;
 import java.nio.file.Files;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
 public class DiscordBotService extends ListenerAdapter {
+    private static final String DECISION_BUTTON_PREFIX = "mapgallery:decision:";
+    private static final String APPROVE_BUTTON_PREFIX = DECISION_BUTTON_PREFIX + "approve:";
+    private static final String DENY_BUTTON_PREFIX = DECISION_BUTTON_PREFIX + "deny:";
+    private static final String DENIAL_MODAL_PREFIX = "mapgallery:deny|";
+
     private final JavaPlugin plugin;
     private final PluginSettings settings;
     private final DataRepository repo;
@@ -93,7 +97,21 @@ public class DiscordBotService extends ListenerAdapter {
     }
 
     public void shutdown() {
-        if (jda != null) jda.shutdownNow();
+        if (jda == null) return;
+        JDA shuttingDown = jda;
+        jda = null;
+        shuttingDown.removeEventListener(this);
+        shuttingDown.shutdown();
+        try {
+            if (!shuttingDown.awaitShutdown(10, TimeUnit.SECONDS)) {
+                shuttingDown.shutdownNow();
+                shuttingDown.awaitShutdown(5, TimeUnit.SECONDS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            shuttingDown.shutdownNow();
+            logException("Interrupted while shutting down Discord bot.", e);
+        }
     }
 
     @Override
@@ -104,8 +122,10 @@ public class DiscordBotService extends ListenerAdapter {
         Instant now = Instant.now();
         Instant nextAllowed = submissionCooldowns.get(event.getUser().getIdLong());
         if (nextAllowed != null && nextAllowed.isAfter(now)) {
-            long remaining = Math.max(1, nextAllowed.getEpochSecond() - now.getEpochSecond());
-            event.reply("You are on cooldown. Try again in " + remaining + "s.").setEphemeral(true).queue();
+            event.reply("You are on cooldown. Try again " + discordTimestamp(nextAllowed, "R")
+                    + " at " + discordTimestamp(nextAllowed, "F") + ".")
+                    .setEphemeral(true)
+                    .queue();
             return;
         }
         String attachmentName = event.getOption("image", o -> o.getAsAttachment().getFileName());
@@ -139,6 +159,10 @@ public class DiscordBotService extends ListenerAdapter {
     @Override
     public void onGenericInteractionCreate(GenericInteractionCreateEvent event) {
         if (!(event.getInteraction() instanceof ModalInteraction modal)) return;
+        if (modal.getModalId().startsWith(DENIAL_MODAL_PREFIX)) {
+            handleDenialModal(modal);
+            return;
+        }
         if (!modal.getModalId().startsWith("submitmap|")) return;
         String[] parts = modal.getModalId().split("\\|", 2);
         if (parts.length != 2) {
@@ -225,16 +249,12 @@ public class DiscordBotService extends ListenerAdapter {
                             .setTimestamp(Instant.now());
 
                     reviewChannel.sendMessageEmbeds(embed.build())
+                            .setActionRow(
+                                    Button.success(APPROVE_BUTTON_PREFIX + requestId, "Approve"),
+                                    Button.danger(DENY_BUTTON_PREFIX + requestId, "Deny")
+                            )
                             .addFiles(FileUpload.fromData(data, previewFilename))
                             .queue(msg -> {
-                                msg.addReaction(Emoji.fromUnicode("👍")).queue(
-                                        success -> logDebug("Added 👍 reaction for requestId=" + requestId),
-                                        fail -> logException("Failed adding 👍 reaction for requestId=" + requestId, fail)
-                                );
-                                msg.addReaction(Emoji.fromUnicode("👎")).queue(
-                                        success -> logDebug("Added 👎 reaction for requestId=" + requestId),
-                                        fail -> logException("Failed adding 👎 reaction for requestId=" + requestId, fail)
-                                );
                                 PendingSubmission pending = new PendingSubmission(requestId, modal.getUser().getIdLong(),
                                         modal.getUser().getName(), title, safeTitle, outFile.getAbsolutePath(), hash,
                                         Instant.now(), msg.getIdLong());
@@ -259,41 +279,139 @@ public class DiscordBotService extends ListenerAdapter {
     }
 
     @Override
-    public void onMessageReactionAdd(MessageReactionAddEvent event) {
-        if (event.getUser() == null || event.getUser().isBot()) return;
+    public void onButtonInteraction(ButtonInteractionEvent event) {
+        String componentId = event.getComponentId();
+        if (!componentId.startsWith(DECISION_BUTTON_PREFIX)) return;
+        if (event.getUser().isBot()) return;
         if (event.getChannel().getIdLong() != settings.reviewChannelId) return;
+        if (event.getMember() == null || !isStaff(event.getUser().getIdLong(), event.getMember().getRoles())) {
+            event.reply("Only configured staff can approve or deny map requests.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
 
-        repo.getPendingByMessage(event.getMessageIdLong()).ifPresent(pending -> {
-            if (!isStaff(event.getUser().getIdLong(), event.retrieveMember().complete().getRoles())) return;
-
+        repo.getPendingByMessage(event.getMessageIdLong()).ifPresentOrElse(pending -> {
             String req = pending.getRequestId();
-            if (!inFlight.add(req)) return;
-            AtomicBoolean approve = new AtomicBoolean(event.getEmoji().getName().equals("👍"));
-            if (!approve.get() && !event.getEmoji().getName().equals("👎")) {
-                inFlight.remove(req);
+            boolean approve = componentId.equals(APPROVE_BUTTON_PREFIX + req);
+            if (!approve && !componentId.equals(DENY_BUTTON_PREFIX + req)) {
+                event.reply("This button does not match the pending request.")
+                        .setEphemeral(true)
+                        .queue();
                 return;
             }
-            logDebug("Processing decision for requestId=" + req + " approver=" + event.getUser().getId() + " approved=" + approve.get());
+            if (!approve) {
+                TextInput reasonInput = TextInput.create("reason", "Denial reason", TextInputStyle.PARAGRAPH)
+                        .setRequired(true)
+                        .setRequiredRange(1, 512)
+                        .build();
+                Modal modal = Modal.create(DENIAL_MODAL_PREFIX + req + "|" + event.getMessageId(), "Deny map request")
+                        .addActionRow(reasonInput)
+                        .build();
+                event.replyModal(modal).queue(
+                        success -> logDebug("Presented denial modal for requestId=" + req),
+                        fail -> logException("Failed to present denial modal for requestId=" + req, fail)
+                );
+                return;
+            }
+            if (!inFlight.add(req)) return;
+            logDebug("Processing decision for requestId=" + req + " approver=" + event.getUser().getId() + " approved=" + approve);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 try {
-                    processDecision(event.getUser(), pending, approve.get());
-                    event.retrieveMessage().queue(message -> {
-                        Message updated = message;
-                        if (!message.getEmbeds().isEmpty()) {
-                            EmbedBuilder builder = new EmbedBuilder(message.getEmbeds().getFirst())
-                                    .setColor(approve.get() ? Color.GREEN : Color.RED)
-                                    .addField("Status", approve.get() ? "Approved" : "Denied", false)
-                                    .setTimestamp(Instant.now());
-                            message.editMessageEmbeds(builder.build()).queue();
-                        }
-                        updated.clearReactions().queue();
-                    }, fail -> logException("Failed to update review message for requestId=" + req, fail));
+                    processDecision(event.getUser(), pending, true, null);
+                    EmbedBuilder builder = event.getMessage().getEmbeds().isEmpty()
+                            ? new EmbedBuilder()
+                            : new EmbedBuilder(event.getMessage().getEmbeds().getFirst());
+                    builder.setColor(Color.GREEN)
+                            .addField("Status", "Approved", false)
+                            .setTimestamp(Instant.now());
+                    event.editMessageEmbeds(builder.build()).setComponents().queue(
+                            success -> logDebug("Updated review message for requestId=" + req),
+                            fail -> logException("Failed to update review message for requestId=" + req, fail)
+                    );
                 } finally {
                     inFlight.remove(req);
                 }
             });
-        });
+        }, () -> event.reply("This map request is no longer pending.")
+                .setEphemeral(true)
+                .queue());
+    }
+
+    private void handleDenialModal(ModalInteraction modal) {
+        if (modal.getMember() == null || !isStaff(modal.getUser().getIdLong(), modal.getMember().getRoles())) {
+            modal.reply("Only configured staff can deny map requests.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        String raw = modal.getModalId().substring(DENIAL_MODAL_PREFIX.length());
+        String[] parts = raw.split("\\|", 2);
+        if (parts.length != 2) {
+            modal.reply("Invalid denial state.").setEphemeral(true).queue();
+            logDebug("Rejected denial modal with malformed id=" + modal.getModalId());
+            return;
+        }
+
+        String requestId = parts[0];
+        long messageId;
+        try {
+            messageId = Long.parseLong(parts[1]);
+        } catch (NumberFormatException e) {
+            modal.reply("Invalid denial message state.").setEphemeral(true).queue();
+            logException("Failed parsing denial modal message id for requestId=" + requestId, e);
+            return;
+        }
+
+        repo.getPendingByMessage(messageId).ifPresentOrElse(pending -> {
+            if (!pending.getRequestId().equals(requestId)) {
+                modal.reply("This denial form does not match the pending request.")
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+            if (!inFlight.add(requestId)) {
+                modal.reply("This request is already being processed.")
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+
+            String reason = TextUtil.sanitizeToken(modal.getValue("reason").getAsString(), 512);
+            modal.deferReply(true).queue(
+                    success -> logDebug("Deferred denial modal for requestId=" + requestId),
+                    fail -> logException("Failed to defer denial modal for requestId=" + requestId, fail)
+            );
+
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                try {
+                    processDecision(modal.getUser(), pending, false, reason);
+                    TextChannel reviewChannel = modal.getJDA().getTextChannelById(settings.reviewChannelId);
+                    if (reviewChannel != null) {
+                        reviewChannel.retrieveMessageById(messageId).queue(message -> {
+                            EmbedBuilder builder = message.getEmbeds().isEmpty()
+                                    ? new EmbedBuilder()
+                                    : new EmbedBuilder(message.getEmbeds().getFirst());
+                            builder.setColor(Color.RED)
+                                    .addField("Status", "Denied", false)
+                                    .addField("Denial Reason", reason, false)
+                                    .setTimestamp(Instant.now());
+                            message.editMessageEmbeds(builder.build()).setComponents().queue(
+                                    success -> logDebug("Updated denied review message for requestId=" + requestId),
+                                    fail -> logException("Failed to update denied review message for requestId=" + requestId, fail)
+                            );
+                        }, fail -> logException("Failed retrieving review message for denied requestId=" + requestId, fail));
+                    }
+                    modal.getHook().sendMessage("Denied request " + requestId + ".").queue();
+                } finally {
+                    inFlight.remove(requestId);
+                }
+            });
+        }, () -> modal.reply("This map request is no longer pending.")
+                .setEphemeral(true)
+                .queue());
     }
 
     private boolean isStaff(long userId, java.util.List<Role> roles) {
@@ -304,7 +422,7 @@ public class DiscordBotService extends ListenerAdapter {
         return false;
     }
 
-    private void processDecision(User actor, PendingSubmission pending, boolean approved) {
+    private void processDecision(User actor, PendingSubmission pending, boolean approved, String denialReason) {
         File file = new File(pending.getImagePath());
         if (!file.exists()) {
             logDebug("Pending file missing for requestId=" + pending.getRequestId() + " path=" + pending.getImagePath());
@@ -314,9 +432,11 @@ public class DiscordBotService extends ListenerAdapter {
 
         try {
             if (approved) {
+                MinecraftIdentity minecraftIdentity = resolveMinecraftIdentity(pending.getDiscordUserId(), pending.getDiscordUsername());
                 if (repo.containsHash(pending.getImageHash())) {
-                    logToChannel(settings.deniedLogChannelId, "Duplicate hash denied: " + pending.getRequestId());
-                    dmResult(pending.getDiscordUserId(), false, pending.getTitle(), "Duplicate image already exists");
+                    logDecisionToChannel(settings.deniedLogChannelId, pending, actor, minecraftIdentity,
+                            "Denied", "Duplicate image already exists", null);
+                    dmDenied(pending, "Duplicate image already exists");
                 } else {
                     BufferedImage image = javax.imageio.ImageIO.read(file);
                     if (image == null) throw new IllegalStateException("Pending image is unreadable");
@@ -326,19 +446,21 @@ public class DiscordBotService extends ListenerAdapter {
                     File approvedDir = new File(plugin.getDataFolder(), "approved");
                     File approvedImage = new File(approvedDir, pending.getRequestId() + ".png");
                     ImageUtil.writePng(normalized, approvedImage);
-                    String minecraftName = resolveMinecraftName(pending.getDiscordUserId(), pending.getDiscordUsername());
-                    String display = settings.namingFormat.replace("%user%", minecraftName)
+                    String display = settings.namingFormat.replace("%user%", minecraftIdentity.name())
                             .replace("%title%", pending.getSanitizedTitle());
                     GalleryItem item = repo.addGalleryItem(view.getId(), TextUtil.sanitizeToken(display, 64), pending.getTitle(),
-                            minecraftName, pending.getDiscordUserId(), pending.getImageHash(),
+                            minecraftIdentity.name(), pending.getDiscordUserId(), pending.getImageHash(),
                             approvedImage.getAbsolutePath());
-                    logToChannel(settings.approvedLogChannelId,
-                            "Approved #" + item.getId() + " by " + actor.getName() + " for " + minecraftName + " Request ID: "+ pending.getRequestId());
-                    dmResult(pending.getDiscordUserId(), true, pending.getTitle(), " Use `/gallery give " + item.getId() +"`" + " To obtain your map in-game! ");
+                    logDecisionToChannel(settings.approvedLogChannelId, pending, actor, minecraftIdentity,
+                            "Approved", null, item.getId());
+                    dmApproved(pending, item);
                 }
             } else {
-                logToChannel(settings.deniedLogChannelId, "Denied request " + pending.getRequestId() + " by " + actor.getName());
-                dmResult(pending.getDiscordUserId(), false, pending.getTitle(), "Denied by staff review");
+                MinecraftIdentity minecraftIdentity = resolveMinecraftIdentity(pending.getDiscordUserId(), pending.getDiscordUsername());
+                String reason = denialReason == null || denialReason.isBlank() ? "Denied by staff review" : denialReason;
+                logDecisionToChannel(settings.deniedLogChannelId, pending, actor, minecraftIdentity,
+                        "Denied", reason, null);
+                dmDenied(pending, reason);
             }
         } catch (Exception e) {
             plugin.getLogger().warning("Failed processing decision " + pending.getRequestId() + ": " + e.getMessage());
@@ -353,26 +475,75 @@ public class DiscordBotService extends ListenerAdapter {
         }
     }
 
-    private void dmResult(long userId, boolean approved, String title, String reason) {
+    private void dmApproved(PendingSubmission pending, GalleryItem item) {
         if (!settings.dmEnabled || jda == null) return;
-        jda.retrieveUserById(userId).queue(
+        EmbedBuilder embed = new EmbedBuilder()
+                .setColor(Color.GREEN)
+                .setTitle("Your Map Request has been Approved!")
+                .addField("Request ID:", pending.getRequestId(), false)
+                .addField("Title:", pending.getTitle(), false)
+                .addField("Gallery ID:", String.valueOf(item.getId()), false)
+                .setDescription("\n\n\nYou can use `/gallery give " + item.getId() + "` In game to receive your map!")
+                .setTimestamp(item.getApprovedAt());
+        jda.retrieveUserById(pending.getDiscordUserId()).queue(
                 user -> user.openPrivateChannel().queue(
-                        channel -> channel.sendMessage("Your map submission **" + title + "** was " + (approved ? "approved" : "denied") + ". " + reason)
+                        channel -> channel.sendMessageEmbeds(embed.build())
                                 .queue(
-                                        success -> logDebug("Sent DM result to userId=" + userId + " approved=" + approved),
-                                        fail -> logException("Failed sending DM result to userId=" + userId + " approved=" + approved, fail)
+                                        success -> logDebug("Sent approval DM to userId=" + pending.getDiscordUserId()),
+                                        fail -> logException("Failed sending approval DM to userId=" + pending.getDiscordUserId(), fail)
                                 ),
-                        fail -> logException("Failed to open DM channel for userId=" + userId, fail)
+                        fail -> logException("Failed to open DM channel for userId=" + pending.getDiscordUserId(), fail)
                 ),
-                fail -> logException("Failed to retrieve user for DM userId=" + userId, fail)
+                fail -> logException("Failed to retrieve user for DM userId=" + pending.getDiscordUserId(), fail)
         );
     }
 
-    private void logToChannel(long channelId, String msg) {
+    private void dmDenied(PendingSubmission pending, String reason) {
+        if (!settings.dmEnabled || jda == null) return;
+        EmbedBuilder embed = new EmbedBuilder()
+                .setColor(Color.RED)
+                .setTitle("Your Map Request has been Denied")
+                .addField("Request ID:", pending.getRequestId(), false)
+                .addField("Title:", pending.getTitle(), false)
+                .addField("Reason:", reason, false)
+                .setTimestamp(Instant.now());
+        jda.retrieveUserById(pending.getDiscordUserId()).queue(
+                user -> user.openPrivateChannel().queue(
+                        channel -> channel.sendMessageEmbeds(embed.build())
+                                .queue(
+                                        success -> logDebug("Sent denial DM to userId=" + pending.getDiscordUserId()),
+                                        fail -> logException("Failed sending denial DM to userId=" + pending.getDiscordUserId(), fail)
+                                ),
+                        fail -> logException("Failed to open DM channel for userId=" + pending.getDiscordUserId(), fail)
+                ),
+                fail -> logException("Failed to retrieve user for DM userId=" + pending.getDiscordUserId(), fail)
+        );
+    }
+
+    private void logDecisionToChannel(long channelId, PendingSubmission pending, User actor,
+                                      MinecraftIdentity minecraftIdentity, String approvalState,
+                                      String reason, Integer galleryId) {
         if (jda == null || channelId == 0L) return;
         TextChannel ch = jda.getTextChannelById(channelId);
         if (ch != null && ch.getGuild().getSelfMember().hasPermission(ch, Permission.MESSAGE_SEND)) {
-            ch.sendMessage(msg).queueAfter(0, TimeUnit.SECONDS, success -> logDebug("Logged message to channelId=" + channelId),
+            Instant decidedAt = Instant.now();
+            EmbedBuilder embed = new EmbedBuilder()
+                    .setColor("Approved".equalsIgnoreCase(approvalState) ? Color.GREEN : Color.RED)
+                    .addField("Request ID:", pending.getRequestId(), false)
+                    .addField("Title:", pending.getTitle(), false)
+                    .addField("Discord name:", pending.getDiscordUsername(), false)
+                    .addField("Discord ID:", String.valueOf(pending.getDiscordUserId()), false)
+                    .addField("Minecraft IGN:", minecraftIdentity.name(), false)
+                    .addField("Minecraft UUID:", minecraftIdentity.uuid(), false)
+                    .addField("Time of Approval:", discordTimestamp(decidedAt, "F"), false)
+                    .addField("Approval State:", approvalState, false)
+                    .addField("Approver:", actor.getName() + " (" + actor.getId() + ")", false)
+                    .setTimestamp(decidedAt);
+            if (galleryId != null) embed.addField("Gallery ID:", String.valueOf(galleryId), false);
+            if (reason != null && !reason.isBlank()) embed.addField("Reason:", reason, false);
+
+            ch.sendMessageEmbeds(embed.build())
+                    .queueAfter(0, TimeUnit.SECONDS, success -> logDebug("Logged decision embed to channelId=" + channelId),
                     fail -> logException("Failed to log message to channelId=" + channelId, fail));
         } else {
             logDebug("Skipping log channel send. channelId=" + channelId + " channelExists=" + (ch != null));
@@ -384,17 +555,23 @@ public class DiscordBotService extends ListenerAdapter {
         modalAttachmentContext.entrySet().removeIf(e -> e.getValue().createdAt().isBefore(cutoff));
     }
 
-    private String resolveMinecraftName(long discordUserId, String fallback) {
+    private MinecraftIdentity resolveMinecraftIdentity(long discordUserId, String fallbackName) {
         try {
-            if (Bukkit.getPluginManager().getPlugin("DiscordSRV") == null) return fallback;
+            if (Bukkit.getPluginManager().getPlugin("DiscordSRV") == null) {
+                return new MinecraftIdentity("Unknown", "Unknown");
+            }
             java.util.UUID uuid = github.scarsz.discordsrv.DiscordSRV.getPlugin().getAccountLinkManager().getUuid(String.valueOf(discordUserId));
-            if (uuid == null) return fallback;
+            if (uuid == null) return new MinecraftIdentity("Unknown", "Unknown");
             org.bukkit.OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
-            return player.getName() != null ? player.getName() : fallback;
+            return new MinecraftIdentity(Objects.requireNonNullElse(player.getName(), "Unknown"), uuid.toString());
         } catch (Throwable t) {
             logException("Failed to resolve Minecraft name for Discord userId=" + discordUserId, t);
-            return fallback;
+            return new MinecraftIdentity("Unknown", "Unknown");
         }
+    }
+
+    private String discordTimestamp(Instant instant, String style) {
+        return "<t:" + instant.getEpochSecond() + ":" + style + ">";
     }
 
     private void logDebug(String message) {
@@ -408,4 +585,6 @@ public class DiscordBotService extends ListenerAdapter {
     }
 
     private record AttachmentContext(String url, String filename, long size, Instant createdAt) {}
+
+    private record MinecraftIdentity(String name, String uuid) {}
 }
