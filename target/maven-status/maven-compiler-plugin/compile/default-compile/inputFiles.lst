@@ -1,0 +1,13 @@
+D:\GitHub\MapGallery\src\main\java\tech\underside\mapgallery\commands\GalleryCommand.java
+D:\GitHub\MapGallery\src\main\java\tech\underside\mapgallery\config\PluginSettings.java
+D:\GitHub\MapGallery\src\main\java\tech\underside\mapgallery\discord\DiscordBotService.java
+D:\GitHub\MapGallery\src\main\java\tech\underside\mapgallery\gallery\GalleryService.java
+D:\GitHub\MapGallery\src\main\java\tech\underside\mapgallery\gui\GalleryGuiListener.java
+D:\GitHub\MapGallery\src\main\java\tech\underside\mapgallery\MapGalleryPlugin.java
+D:\GitHub\MapGallery\src\main\java\tech\underside\mapgallery\maps\MapArtService.java
+D:\GitHub\MapGallery\src\main\java\tech\underside\mapgallery\maps\StaticMapRenderer.java
+D:\GitHub\MapGallery\src\main\java\tech\underside\mapgallery\model\GalleryItem.java
+D:\GitHub\MapGallery\src\main\java\tech\underside\mapgallery\model\PendingSubmission.java
+D:\GitHub\MapGallery\src\main\java\tech\underside\mapgallery\storage\DataRepository.java
+D:\GitHub\MapGallery\src\main\java\tech\underside\mapgallery\util\ImageUtil.java
+D:\GitHub\MapGallery\src\main\java\tech\underside\mapgallery\util\TextUtil.java
