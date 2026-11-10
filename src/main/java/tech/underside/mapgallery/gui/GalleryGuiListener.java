@@ -81,8 +81,22 @@ public class GalleryGuiListener implements Listener {
     @EventHandler
     public void onClick(InventoryClickEvent event) {
         if (event.getView().getTitle() == null || !event.getView().getTitle().startsWith(title)) return;
-        event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player player)) return;
+
+	// Ignore clicks into the player's inventory, but disallow
+	// shift-clicks since they would move items into gallery inventory.
+	// Only cancel clicks into the gallery inventory so the player can
+	// drop items into their own inventory and rearrange their inventory.
+    	Inventory clickedInv = event.getClickedInventory();
+    	Inventory topInv = event.getView().getTopInventory();
+	if (clickedInv == null || !clickedInv.equals(topInv)) {
+	    if (event.isShiftClick()) {
+		event.setCancelled(true);
+	    }
+	    return;
+	}
+        event.setCancelled(true);
+
         ItemStack clicked = event.getCurrentItem();
         if (clicked == null || !clicked.hasItemMeta()) return;
         GalleryViewState state = viewState.get(player.getUniqueId());
@@ -114,14 +128,13 @@ public class GalleryGuiListener implements Listener {
                 player.sendMessage("Map data missing for #" + id);
                 return;
             }
+	    // Put the map into the cursor so that the player has to drop it in their inventory.
             ItemStack map = mapService.createMapItem(view, item.getId(), item.getCreatorName(), item.getTitle());
-            var overflow = player.getInventory().addItem(map);
-            if (!overflow.isEmpty()) {
-                overflow.values().forEach(stack -> player.getWorld().dropItemNaturally(player.getLocation(), stack));
-                player.sendMessage("Inventory full, dropped map near you.");
-            } else {
-                player.sendMessage("Received map #" + id);
-            }
+	    if (event.getCursor() != null && !event.getCursor().getType().isAir()) {
+	    	player.sendMessage("Your cursor is full — place or drop what you're holding first.");
+	    	return;
+	    }
+	    event.setCursor(map);
         });
     }
 
