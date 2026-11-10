@@ -89,12 +89,12 @@ public class GalleryGuiListener implements Listener {
 	// drop items into their own inventory and rearrange their inventory.
     	Inventory clickedInv = event.getClickedInventory();
     	Inventory topInv = event.getView().getTopInventory();
-	if (clickedInv == null || !clickedInv.equals(topInv)) {
-	    if (event.isShiftClick()) {
-		event.setCancelled(true);
-	    }
-	    return;
-	}
+    	if (clickedInv == null || !clickedInv.equals(topInv)) {
+	        if (event.isShiftClick()) {
+	        	event.setCancelled(true);
+    	    }
+	        return;
+    	}
         event.setCancelled(true);
 
         ItemStack clicked = event.getCurrentItem();
