@@ -128,13 +128,13 @@ public class GalleryGuiListener implements Listener {
                 player.sendMessage("Map data missing for #" + id);
                 return;
             }
-	    // Put the map into the cursor so that the player has to drop it in their inventory.
+    	    // Put the map into the cursor so that the player has to drop it in their inventory.
             ItemStack map = mapService.createMapItem(view, item.getId(), item.getCreatorName(), item.getTitle());
-	    if (event.getCursor() != null && !event.getCursor().getType().isAir()) {
-	    	player.sendMessage("Your cursor is full — place or drop what you're holding first.");
-	    	return;
-	    }
-	    event.setCursor(map);
+	        if (event.getCursor() != null && !event.getCursor().getType().isAir()) {
+	        	player.sendMessage("Your cursor is full — place or drop what you're holding first.");
+	        	return;
+	        }
+	        event.setCursor(map);
         });
     }
 
