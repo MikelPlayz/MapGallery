@@ -83,10 +83,10 @@ public class GalleryGuiListener implements Listener {
         if (event.getView().getTitle() == null || !event.getView().getTitle().startsWith(title)) return;
         if (!(event.getWhoClicked() instanceof Player player)) return;
 
-	// Ignore clicks into the player's inventory, but disallow
-	// shift-clicks since they would move items into gallery inventory.
-	// Only cancel clicks into the gallery inventory so the player can
-	// drop items into their own inventory and rearrange their inventory.
+    	// Ignore clicks into the player's inventory, but disallow
+	    // shift-clicks since they would move items into gallery inventory.
+    	// Only cancel clicks into the gallery inventory so the player can
+    	// drop items into their own inventory and rearrange their inventory.
     	Inventory clickedInv = event.getClickedInventory();
     	Inventory topInv = event.getView().getTopInventory();
     	if (clickedInv == null || !clickedInv.equals(topInv)) {
